@@ -169,6 +169,15 @@ abstract class AbstractObjectNormalizer extends AbstractNormalizer
             $maxDepthHandler = null;
         }
 
+        // START MAX DEPTH BY TREE
+        $enableMaxDepth = $context[self::ENABLE_MAX_DEPTH] ?? $this->defaultContext[self::ENABLE_MAX_DEPTH] ?? false;
+        if (!isset($context['depth'])){
+            $context['depth'] = 1;
+        } else {
+            ++$context['depth'];
+        }
+        // END MAX DEPTH BY TREE
+
         foreach ($attributes as $attribute) {
             $maxDepthReached = false;
             if (null !== $attributesMetadata && ($maxDepthReached = $this->isMaxDepthReached($attributesMetadata, $class, $attribute, $context)) && !$maxDepthHandler) {
@@ -192,12 +201,32 @@ abstract class AbstractObjectNormalizer extends AbstractNormalizer
                 $stack[$attribute] = $attributeValue;
             }
 
+            // CHECKING MAX DEPTH AT THE VARIABLE LEVEL
+            $maxDepth = isset($attributesMetadata[$attribute]) ? $attributesMetadata[$attribute]->getMaxDepth() : null;
+            if (
+                $enableMaxDepth &&
+                $maxDepth !== null &&
+                $context['depth'] > $maxDepth
+            ) {
+                continue;
+            }
+
             $data = $this->updateData($data, $attribute, $attributeValue, $class, $format, $context);
         }
 
         foreach ($stack as $attribute => $attributeValue) {
             if (!$this->serializer instanceof NormalizerInterface) {
                 throw new LogicException(sprintf('Cannot normalize attribute "%s" because the injected serializer is not a normalizer.', $attribute));
+            }
+
+            // CHECKING MAX DEPTH AT THE VARIABLE LEVEL
+            $maxDepth = isset($attributesMetadata[$attribute]) ? $attributesMetadata[$attribute]->getMaxDepth() : null;
+            if (
+                $enableMaxDepth &&
+                $maxDepth !== null &&
+                $context['depth'] > $maxDepth
+            ) {
+                continue;
             }
 
             $data = $this->updateData($data, $attribute, $this->serializer->normalize($attributeValue, $format, $this->createChildContext($context, $attribute, $format)), $class, $format, $context);
